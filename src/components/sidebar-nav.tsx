@@ -75,14 +75,16 @@ export function AppSidebar() {
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href} passHref legacyBehavior>
+              <Link href={item.href} passHref>
                 <SidebarMenuButton
-                  as="a"
                   isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
                   tooltip={item.label}
+                  asChild
                 >
-                  <item.icon className="h-5 w-5" />
-                  <span>{item.label}</span>
+                  <div>
+                    <item.icon className="h-5 w-5" />
+                    <span>{item.label}</span>
+                  </div>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -93,14 +95,16 @@ export function AppSidebar() {
         <SidebarMenu>
             {bottomMenuItems.map((item) => (
                 <SidebarMenuItem key={item.href}>
-                    <Link href={item.href} passHref legacyBehavior>
+                    <Link href={item.href} passHref>
                         <SidebarMenuButton
-                            as="a"
                             isActive={pathname.startsWith(item.href)}
                             tooltip={item.label}
+                            asChild
                         >
-                            <item.icon className="h-5 w-5" />
-                            <span>{item.label}</span>
+                            <div>
+                                <item.icon className="h-5 w-5" />
+                                <span>{item.label}</span>
+                            </div>
                         </SidebarMenuButton>
                     </Link>
                 </SidebarMenuItem>
