@@ -1,0 +1,137 @@
+{
+  "entities": {
+    "LeaseAgreement": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LeaseAgreement",
+      "type": "object",
+      "description": "Represents a lease agreement between a landlord and a tenant.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the lease agreement."
+        },
+        "tenantName": {
+          "type": "string",
+          "description": "Name of the tenant."
+        },
+        "tenantContact": {
+          "type": "string",
+          "description": "Contact information of the tenant (e.g., phone number, email)."
+        },
+        "propertyUnit": {
+          "type": "string",
+          "description": "The unit or suite number of the property."
+        },
+        "leaseStartDate": {
+          "type": "string",
+          "description": "The date the lease agreement starts.",
+          "format": "date-time"
+        },
+        "leaseEndDate": {
+          "type": "string",
+          "description": "The date the lease agreement ends.",
+          "format": "date-time"
+        },
+        "monthlyRent": {
+          "type": "number",
+          "description": "The amount of rent due each month."
+        }
+      },
+      "required": [
+        "id",
+        "tenantName",
+        "tenantContact",
+        "propertyUnit",
+        "leaseStartDate",
+        "leaseEndDate",
+        "monthlyRent"
+      ]
+    },
+    "Payment": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Payment",
+      "type": "object",
+      "description": "Represents a payment made by a tenant.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the payment."
+        },
+        "leaseAgreementId": {
+          "type": "string",
+          "description": "Reference to LeaseAgreement. (Relationship: LeaseAgreement 1:N Payment)"
+        },
+        "paymentDate": {
+          "type": "string",
+          "description": "The date the payment was made.",
+          "format": "date-time"
+        },
+        "paymentAmount": {
+          "type": "number",
+          "description": "The amount of the payment."
+        }
+      },
+      "required": [
+        "id",
+        "leaseAgreementId",
+        "paymentDate",
+        "paymentAmount"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}/leaseAgreements/{leaseAgreementId}",
+        "definition": {
+          "entityName": "LeaseAgreement",
+          "schema": {
+            "$ref": "#/backend/entities/LeaseAgreement"
+          },
+          "description": "Stores lease agreements owned by a specific user. Authorization is based on path-based ownership. Includes denormalized 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user (landlord) who owns the lease agreement."
+            },
+            {
+              "name": "leaseAgreementId",
+              "description": "The ID of the lease agreement."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId}",
+        "definition": {
+          "entityName": "Payment",
+          "schema": {
+            "$ref": "#/backend/entities/Payment"
+          },
+          "description": "Stores payments related to a specific lease agreement. Authorization is inherited from the lease agreement's ownership. Includes denormalized 'userId' and 'leaseAgreementId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The ID of the user (landlord) who owns the lease agreement."
+            },
+            {
+              "name": "leaseAgreementId",
+              "description": "The ID of the lease agreement."
+            },
+            {
+              "name": "paymentId",
+              "description": "The ID of the payment."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to manage lease agreements and payments efficiently. Each lease agreement is stored under a specific landlord's user ID, providing clear ownership and access control. Payments are then stored as subcollections within each lease agreement, enabling easy retrieval of payment history for a specific lease. This design emphasizes path-based ownership, which simplifies security rules and provides clear data isolation. To achieve Authorization Independence, no denormalization is needed as access control relies solely on path-based ownership, with each landlord having full access to data stored under their respective user ID.\n\nThis structure is QAP-compliant because:\n\n1.  **Segregation:** Lease agreements and payments are stored separately, which clarifies access needs and simplifies rules.\n2.  **Path-Based Ownership:** Each landlord's data is isolated under their `userId`, preventing unauthorized access to other landlords' information.\n3.  **Hierarchical paths for User-Owned Data**: It supports the `User 1:N Entity` relationship using path-based ownership."
+  }
+}

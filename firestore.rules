@@ -1,0 +1,139 @@
+/**
+ * This ruleset enforces a strict user-ownership model for a property management application.
+ *
+ * Core Philosophy:
+ * All data, including lease agreements and their associated payments, is considered private
+ * and owned by the user (landlord) who created it. There is no public or shared data.
+ * A user can only access data that exists directly under their own user ID in the path.
+ *
+ * Data Structure:
+ * The data is organized hierarchically to reflect ownership clearly:
+ * /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId}
+ * This structure ensures that all data for a specific user is isolated within their
+ * own data tree, simplifying security and queries.
+ *
+ * Key Security Decisions:
+ * - Strict Data Isolation: Users are strictly confined to their own data tree. They cannot
+ *   read, write, or even know about the existence of data belonging to other users.
+ * - No Public Listing: It is impossible for any user to list all lease agreements or
+ *   all users in the system.
+ * - Path and Data Integrity: Rules enforce that documents contain internal IDs (like a
+ *   `userId`) that match the IDs in their document path. This prevents data from being
+ *   created in the wrong location and ensures relational integrity.
+ *
+ * Denormalization for Authorization:
+ * To ensure relational integrity and create simple, fast rules, this ruleset assumes
+ * that key ownership information is denormalized onto documents. Specifically:
+ * - 'LeaseAgreement' documents should contain a 'userId' field matching the user in the path.
+ * - 'Payment' documents should contain a 'userId' and 'leaseAgreementId' field matching their
+ *   respective path segments.
+ * This avoids costly 'get' operations and makes security checks direct and efficient.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions to abstract and reuse common security logic.
+
+    /**
+     * Checks if the user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the authenticated user's UID matches the provided userId.
+     * This is the fundamental check for data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Checks for ownership on an existing document. Used for update and delete
+     * operations to prevent acting on non-existent data.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates a new LeaseAgreement on creation.
+     * Ensures the creator is the owner and that the document's internal IDs
+     * match the IDs in its path for relational integrity.
+     */
+    function isCreatingLeaseAgreement(userId, leaseAgreementId) {
+      // CRITICAL: The incoming document MUST contain a 'userId' field that matches the
+      // authenticated user. This must be added to the LeaseAgreement entity.
+      return isOwner(userId)
+          && request.resource.data.userId == userId
+          && request.resource.data.id == leaseAgreementId;
+    }
+
+    /**
+     * Validates a LeaseAgreement on update.
+     * Ensures the user is the owner and that critical relational IDs are immutable.
+     */
+    function isUpdatingLeaseAgreement(userId) {
+      return isExistingOwner(userId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * Validates a new Payment on creation.
+     * Ensures the creator owns the parent lease and that the document's internal IDs
+     * match the IDs in its path for relational integrity.
+     */
+    function isCreatingPayment(userId, leaseAgreementId, paymentId) {
+      // CRITICAL: The incoming document MUST contain a 'userId' field. This denormalized
+      // field ensures data integrity and should be added to the Payment entity.
+      return isOwner(userId)
+          && request.resource.data.userId == userId
+          && request.resource.data.leaseAgreementId == leaseAgreementId
+          && request.resource.data.id == paymentId;
+    }
+
+    /**
+     * Validates a Payment on update.
+     * Ensures the user is the owner and that critical relational IDs are immutable.
+     */
+    function isUpdatingPayment(userId) {
+      return isExistingOwner(userId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.leaseAgreementId == resource.data.leaseAgreementId
+          && request.resource.data.id == resource.data.id;
+    }
+
+    /**
+     * @description Rules for a user's private collection of lease agreements.
+     * @path /users/{userId}/leaseAgreements/{leaseAgreementId}
+     * @allow (create) An authenticated user with UID 'user123' creating a new lease agreement at `/users/user123/leaseAgreements/lease-abc`.
+     * @deny (get) User 'user456' trying to read a lease agreement at `/users/user123/leaseAgreements/lease-abc`.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId}/leaseAgreements/{leaseAgreementId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isCreatingLeaseAgreement(userId, leaseAgreementId);
+      allow update: if isUpdatingLeaseAgreement(userId);
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Rules for payments, which are subcollections of lease agreements.
+     * @path /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId}
+     * @allow (list) An authenticated user with UID 'user123' listing payments at `/users/user123/leaseAgreements/lease-abc/payments`.
+     * @deny (update) User 'user123' trying to update a payment for another user at `/users/user456/leaseAgreements/lease-xyz/payments/payment-1`.
+     * @principle Enforces inherited ownership from the parent document path.
+     */
+    match /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isCreatingPayment(userId, leaseAgreementId, paymentId);
+      allow update: if isUpdatingPayment(userId);
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}
