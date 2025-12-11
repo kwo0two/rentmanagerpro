@@ -2,41 +2,31 @@
  * This ruleset enforces a strict user-ownership model for a property management application.
  *
  * Core Philosophy:
- * All data, including lease agreements and their associated payments, is considered private
- * and owned by the user (landlord) who created it. There is no public or shared data.
- * A user can only access data that exists directly under their own user ID in the path.
+ * All data is considered private and owned by the user (landlord) who created it.
+ * A user can only access data that exists directly under their own user ID or
+ * contains their `ownerId`.
  *
  * Data Structure:
- * The data is organized hierarchically to reflect ownership clearly:
- * /users/{userId}/...
- * This structure ensures that all data for a specific user is isolated within their
- * own data tree, simplifying security and queries.
+ * - /users/{userId} (Profile information)
+ * - /{collection}/{docId} (Top-level collections like buildings, leaseAgreements, etc.)
  *
  * Key Security Decisions:
- * - Strict Data Isolation: Users are strictly confined to their own data tree. They cannot
- *   read, write, or even know about the existence of data belonging to other users.
- * - No Public Listing: It is impossible for any user to list all lease agreements or
- *   all users in the system.
- * - Path and Data Integrity: Rules enforce that documents contain internal IDs (like a
- *   `userId`) that match the IDs in their document path. This prevents data from being
- *   created in the wrong location and ensures relational integrity.
+ * - Strict Data Isolation: Users are strictly confined to their own data.
+ * - Path and Data Integrity: Rules enforce that created/updated documents contain an `ownerId`
+ *   that matches the authenticated user's UID.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // Helper functions to abstract and reuse common security logic.
-
-    /**
-     * Checks if the user is authenticated.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
     /**
-     * Checks if the authenticated user's UID matches the provided userId.
-     * This is the fundamental check for data ownership.
+     * Checks if the authenticated user's UID matches the provided userId from the path.
+     * This is the fundamental check for data ownership for the /users collection.
      */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
@@ -46,7 +36,7 @@ service cloud.firestore {
      * @description Rules for the users collection.
      * Users can read their own profile.
      * New user profiles are created during sign-up.
-     * Users can update their own profile, but cannot change their approval status.
+     * Users can update their own profile.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -54,19 +44,27 @@ service cloud.firestore {
       allow update: if isOwner(userId);
     }
 
-    // Rules for top-level collections
+    // Rules for all other top-level collections (buildings, leaseAgreements, payments, etc.)
     match /{collection}/{docId} {
-        // Generic rule for collections where documents have an `ownerId`
+        // This function checks if the `ownerId` field inside the document
+        // matches the currently authenticated user's ID.
         function isDocOwner() {
-            return request.auth.uid == resource.data.ownerId;
+            return isSignedIn() && request.auth.uid == resource.data.ownerId;
         }
 
-        function isCreatingDocWithOwner(ownerId) {
-            return request.auth.uid == ownerId && request.resource.data.ownerId == ownerId;
+        // This function ensures that when a document is being created,
+        // the `ownerId` field is correctly set to the creator's UID.
+        function isCreatingWithOwner() {
+            return isSignedIn() && request.resource.data.ownerId == request.auth.uid;
         }
         
+        // Allow reading and deleting only if the user is the owner of the document.
         allow read, delete: if isDocOwner();
-        allow create: if isCreatingDocWithOwner(request.auth.uid);
+        
+        // Allow creation only if the user is signed in and the new document's ownerId is their own.
+        allow create: if isCreatingWithOwner();
+
+        // Allow updates only if the user is the owner, and prevent changing the ownerId.
         allow update: if isDocOwner() && request.resource.data.ownerId == resource.data.ownerId;
     }
   }
