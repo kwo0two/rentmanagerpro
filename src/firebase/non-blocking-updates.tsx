@@ -98,24 +98,24 @@ export function deleteDocumentNonBlocking(docRef: DocumentReference) {
 export async function deleteLeaseAgreementWithRelations(firestore: Firestore, leaseId: string) {
     if (!leaseId) return;
 
-    const writeBatch = writeBatch(firestore);
+    const batch = writeBatch(firestore);
 
     // 1. Delete the lease agreement itself
     const leaseRef = doc(firestore, 'leaseAgreements', leaseId);
-    writeBatch.delete(leaseRef);
+    batch.delete(leaseRef);
 
     // 2. Find and delete related payments
     const paymentsQuery = query(collection(firestore, 'payments'), where('leaseAgreementId', '==', leaseId));
     const paymentsSnapshot = await getDocs(paymentsQuery);
-    paymentsSnapshot.forEach(doc => writeBatch.delete(doc.ref));
+    paymentsSnapshot.forEach(doc => batch.delete(doc.ref));
     
     // 3. Find and delete related rent adjustments
     const adjustmentsQuery = query(collection(firestore, 'rentAdjustments'), where('leaseAgreementId', '==', leaseId));
     const adjustmentsSnapshot = await getDocs(adjustmentsQuery);
-    adjustmentsSnapshot.forEach(doc => writeBatch.delete(doc.ref));
+    adjustmentsSnapshot.forEach(doc => batch.delete(doc.ref));
 
     try {
-        await writeBatch.commit();
+        await batch.commit();
         console.log(`Successfully deleted lease ${leaseId} and all related documents.`);
     } catch (error) {
         console.error("Error deleting lease agreement with relations:", error);
