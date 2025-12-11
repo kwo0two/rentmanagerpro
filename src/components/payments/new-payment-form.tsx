@@ -23,9 +23,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useFirebase } from '@/firebase';
 import { LeaseAgreement, Building } from '@/lib/types';
-import { collection, query, where, doc, getDocs, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, doc, getDocs, writeBatch } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import React, { useMemo, useEffect, useState } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { CalendarIcon, Loader2 } from 'lucide-react';
@@ -206,19 +205,6 @@ export function NewPaymentForm() {
         });
 
         await batch.commit();
-
-        await addDocumentNonBlocking(doc(collection(firestore, 'logs'), uuidv4()), {
-             userId: user.uid,
-             userEmail: user.email || 'N/A',
-             action: 'create_payment',
-             timestamp: serverTimestamp(),
-             details: { 
-                 leaseAgreementId: values.leaseAgreementId,
-                 count: paymentDates.length,
-                 amount: values.paymentAmount,
-                 bulk: bulkMode === 'bulk',
-             },
-        });
 
       toast({
         title: '납부 기록 추가됨',

@@ -104,12 +104,6 @@ export function EditBuildingForm({ buildingId }: EditBuildingFormProps) {
     try {
       await updateDocumentNonBlocking(buildingRef, {
         ...values,
-      },
-      {
-        userId: user.uid,
-        userEmail: user.email || 'N/A',
-        action: 'update_building',
-        details: { buildingId, name: values.name, address: values.address },
       });
 
       toast({

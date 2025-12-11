@@ -217,12 +217,7 @@ export function NewTenantForm({ leaseId }: NewTenantFormProps) {
 
         if (isEditMode && leaseId) {
             const leaseAgreementRef = doc(firestore, 'leaseAgreements', leaseId);
-            await updateDocumentNonBlocking(leaseAgreementRef, finalData, {
-                userId: user.uid,
-                userEmail: user.email || 'N/A',
-                action: 'update_tenant',
-                details: { leaseId, tenantName: values.tenantName },
-            });
+            await updateDocumentNonBlocking(leaseAgreementRef, finalData);
             toast({
                 title: '계약 수정됨',
                 description: `${values.tenantName} 님의 계약 정보가 성공적으로 수정되었습니다.`,
@@ -235,11 +230,6 @@ export function NewTenantForm({ leaseId }: NewTenantFormProps) {
                 ...finalData,
                 id: newLeaseId,
                 createdAt: serverTimestamp(),
-            }, {
-                userId: user.uid,
-                userEmail: user.email || 'N/A',
-                action: 'create_tenant',
-                details: { leaseId: newLeaseId, tenantName: values.tenantName },
             });
             toast({
               title: '임차인 추가됨',
@@ -263,13 +253,12 @@ export function NewTenantForm({ leaseId }: NewTenantFormProps) {
     if (!firestore || !user || !leaseId) return;
 
     setIsSubmitting(true);
-    await deleteLeaseAgreementWithRelations(firestore, leaseId, {
-      userId: user.uid,
-      userEmail: user.email || 'N/A',
-      action: 'delete_tenant',
-      details: { leaseId, tenantName: form.getValues('tenantName') },
-    });
+    await deleteLeaseAgreementWithRelations(firestore, leaseId);
     setIsSubmitting(false);
+    toast({
+        title: "계약 삭제됨",
+        description: "임대차 계약 및 관련 데이터가 모두 삭제되었습니다.",
+    });
     router.push('/tenants');
   };
 

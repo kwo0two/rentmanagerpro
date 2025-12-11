@@ -60,12 +60,6 @@ export function NewBuildingForm() {
             ...values,
             ownerId: user.uid,
             units: [],
-        },
-        {
-          userId: user.uid,
-          userEmail: user.email || 'N/A',
-          action: 'create_building',
-          details: { buildingId: newBuildingId, name: values.name },
         });
 
         toast({

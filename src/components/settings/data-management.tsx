@@ -79,7 +79,7 @@ function parseDate(dateValue: any): Date | null {
 async function deleteCollectionForUser(
     firestore: Firestore, 
     collectionName: string, 
-    user: UserProfile, 
+    user: { id: string },
 ) {
     try {
         const batch = writeBatch(firestore);
@@ -166,7 +166,7 @@ export function DataManagement() {
         const userOwnedCollections = ['buildings', 'leaseAgreements', 'payments', 'rentAdjustments', 'logs'];
         
         for (const name of userOwnedCollections) {
-            await deleteCollectionForUser(firestore, name, { id: user.uid, email: user.email!, isApproved: true });
+            await deleteCollectionForUser(firestore, name, { id: user.uid });
         }
 
         return true;
