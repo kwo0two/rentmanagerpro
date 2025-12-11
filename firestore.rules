@@ -8,7 +8,7 @@
  *
  * Data Structure:
  * The data is organized hierarchically to reflect ownership clearly:
- * /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId}
+ * /users/{userId}/...
  * This structure ensures that all data for a specific user is isolated within their
  * own data tree, simplifying security and queries.
  *
@@ -19,15 +19,8 @@
  *   all users in the system.
  * - Path and Data Integrity: Rules enforce that documents contain internal IDs (like a
  *   `userId`) that match the IDs in their document path. This prevents data from being
+
  *   created in the wrong location and ensures relational integrity.
- *
- * Denormalization for Authorization:
- * To ensure relational integrity and create simple, fast rules, this ruleset assumes
- * that key ownership information is denormalized onto documents. Specifically:
- * - 'LeaseAgreement' documents should contain a 'userId' field matching the user in the path.
- * - 'Payment' documents should contain a 'userId' and 'leaseAgreementId' field matching their
- *   respective path segments.
- * This avoids costly 'get' operations and makes security checks direct and efficient.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -64,10 +57,8 @@ service cloud.firestore {
      * match the IDs in its path for relational integrity.
      */
     function isCreatingLeaseAgreement(userId, leaseAgreementId) {
-      // CRITICAL: The incoming document MUST contain a 'userId' field that matches the
-      // authenticated user. This must be added to the LeaseAgreement entity.
       return isOwner(userId)
-          && request.resource.data.userId == userId
+          && request.resource.data.ownerId == userId
           && request.resource.data.id == leaseAgreementId;
     }
 
@@ -77,7 +68,7 @@ service cloud.firestore {
      */
     function isUpdatingLeaseAgreement(userId) {
       return isExistingOwner(userId)
-          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.id == resource.data.id;
     }
 
@@ -87,10 +78,8 @@ service cloud.firestore {
      * match the IDs in its path for relational integrity.
      */
     function isCreatingPayment(userId, leaseAgreementId, paymentId) {
-      // CRITICAL: The incoming document MUST contain a 'userId' field. This denormalized
-      // field ensures data integrity and should be added to the Payment entity.
       return isOwner(userId)
-          && request.resource.data.userId == userId
+          && request.resource.data.ownerId == userId
           && request.resource.data.leaseAgreementId == leaseAgreementId
           && request.resource.data.id == paymentId;
     }
@@ -101,39 +90,38 @@ service cloud.firestore {
      */
     function isUpdatingPayment(userId) {
       return isExistingOwner(userId)
-          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.ownerId == resource.data.ownerId
           && request.resource.data.leaseAgreementId == resource.data.leaseAgreementId
           && request.resource.data.id == resource.data.id;
     }
 
     /**
-     * @description Rules for a user's private collection of lease agreements.
-     * @path /users/{userId}/leaseAgreements/{leaseAgreementId}
-     * @allow (create) An authenticated user with UID 'user123' creating a new lease agreement at `/users/user123/leaseAgreements/lease-abc`.
-     * @deny (get) User 'user456' trying to read a lease agreement at `/users/user123/leaseAgreements/lease-abc`.
-     * @principle Restricts access to a user's own data tree.
+     * @description Rules for the users collection.
+     * Users can read their own profile. Admins can read/write any profile (for approval).
+     * New user profiles are created during sign-up.
      */
-    match /users/{userId}/leaseAgreements/{leaseAgreementId} {
+    match /users/{userId} {
       allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isCreatingLeaseAgreement(userId, leaseAgreementId);
-      allow update: if isUpdatingLeaseAgreement(userId);
-      allow delete: if isExistingOwner(userId);
+      // Only authenticated users can create their own user document
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      // Users can update their own profile, but cannot change their approval status.
+      allow update: if isOwner(userId) && request.resource.data.isApproved == resource.data.isApproved;
     }
 
-    /**
-     * @description Rules for payments, which are subcollections of lease agreements.
-     * @path /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId}
-     * @allow (list) An authenticated user with UID 'user123' listing payments at `/users/user123/leaseAgreements/lease-abc/payments`.
-     * @deny (update) User 'user123' trying to update a payment for another user at `/users/user456/leaseAgreements/lease-xyz/payments/payment-1`.
-     * @principle Enforces inherited ownership from the parent document path.
-     */
-    match /users/{userId}/leaseAgreements/{leaseAgreementId}/payments/{paymentId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isCreatingPayment(userId, leaseAgreementId, paymentId);
-      allow update: if isUpdatingPayment(userId);
-      allow delete: if isExistingOwner(userId);
+    // Rules for top-level collections
+    match /{collection}/{docId} {
+        // Generic rule for collections where documents have an `ownerId`
+        function isDocOwner() {
+            return request.auth.uid == resource.data.ownerId;
+        }
+
+        function isCreatingDocWithOwner(ownerId) {
+            return request.auth.uid == ownerId && request.resource.data.ownerId == ownerId;
+        }
+        
+        allow read, delete: if isDocOwner();
+        allow create: if isCreatingDocWithOwner(request.auth.uid);
+        allow update: if isDocOwner() && request.resource.data.ownerId == resource.data.ownerId;
     }
   }
 }
