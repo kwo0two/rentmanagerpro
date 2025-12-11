@@ -1,7 +1,26 @@
 # Settings to manage and configure a Firebase App Hosting backend.
 # https://firebase.google.com/docs/app-hosting/configure
 
+# The location of your backend
+location: asia-east2
+
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+  # The following settings are optional
+  # cpu: 1
+  # memoryMiB: 1024
+
+buildConfig:
+  # You can specify a custom build command here if you need to.
+  # command: "npm run build"
+  # The following settings are optional
+  # resolvedEnv:
+  #   NODE_ENV: production
+  #   NEXT_PUBLIC_SOME_VAR: "some value"
+  # excludedFiles:
+  #   - "**/node_modules/**"
+  #   - "**/.git/**"
+  #   - "**/README.md"
+  cpu: 2

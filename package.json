@@ -53,7 +53,7 @@
     "xlsx": "^0.18.5",
     "zod": "3.23.8",
     "genkit": "^1.0.0",
-    "@genkit-ai/google-genai": ""
+    "@genkit-ai/google-genai": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
