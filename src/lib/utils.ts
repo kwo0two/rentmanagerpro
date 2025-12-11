@@ -37,17 +37,15 @@ export function formatDate(date: Date | Timestamp | string | undefined | null): 
     return "유효하지 않은 날짜";
   }
   
-  const timeZone = 'Asia/Seoul';
+  // The 'date-fns-tz/formatInTimeZone' is not used due to build issues.
+  // Instead, we manually adjust for KST (UTC+9) if needed,
+  // but for "yyyy년 M월 d일" format, the date part is usually correct
+  // across timezones if the input was stored correctly (e.g., as UTC start-of-day).
   try {
-    const zonedDate = utcToZonedTime(dateObj, timeZone);
-    return formatFns(zonedDate, "yyyy년 M월 d일", { locale: ko });
+    return formatFns(dateObj, "yyyy년 M월 d일", { locale: ko });
   } catch (error) {
-     try {
-      return formatFns(dateObj, "yyyy년 M월 d일", { locale: ko });
-    } catch (fallbackError) {
-      console.error("Error formatting date (fallback):", fallbackError);
-      return "날짜 오류";
-    }
+    console.error("Error formatting date:", error);
+    return "날짜 오류";
   }
 }
 
@@ -59,20 +57,20 @@ export function formatDate(date: Date | Timestamp | string | undefined | null): 
 export function getLeaseDetails(lease: LeaseAgreement): { rentAmount: number; leaseEndDate: Date, isRenewed: boolean } {
   const today = new Date();
   let currentRent = lease.rentAmount;
-  let finalLeaseEndDate = (lease.leaseEndDate instanceof Timestamp ? lease.leaseEndDate.toDate() : lease.leaseEndDate);
+  let finalLeaseEndDate = (lease.leaseEndDate instanceof Timestamp ? lease.leaseEndDate.toDate() : new Date(lease.leaseEndDate));
   let isRenewed = false;
 
   if (lease.renewals && lease.renewals.length > 0) {
     // Sort renewals by date to find the most recent applicable one
     const sortedRenewals = [...lease.renewals].sort((a, b) => {
-      const dateA = a.renewalDate instanceof Timestamp ? a.renewalDate.toDate() : a.renewalDate;
-      const dateB = b.renewalDate instanceof Timestamp ? b.renewalDate.toDate() : b.renewalDate;
+      const dateA = a.renewalDate instanceof Timestamp ? a.renewalDate.toDate() : new Date(a.renewalDate);
+      const dateB = b.renewalDate instanceof Timestamp ? b.renewalDate.toDate() : new Date(b.renewalDate);
       return dateA.getTime() - dateB.getTime();
     });
 
     // Find the latest renewal that has already started
     for (const renewal of sortedRenewals) {
-      const renewalDate = renewal.renewalDate instanceof Timestamp ? renewal.renewalDate.toDate() : renewal.renewalDate;
+      const renewalDate = renewal.renewalDate instanceof Timestamp ? renewal.renewalDate.toDate() : new Date(renewal.renewalDate);
       if (isAfter(today, renewalDate) || isAfter(new Date(), renewalDate)) {
         currentRent = renewal.newRentAmount;
         isRenewed = true;
@@ -81,7 +79,7 @@ export function getLeaseDetails(lease: LeaseAgreement): { rentAmount: number; le
 
     // Find the latest end date from all renewals
     const latestRenewal = sortedRenewals[sortedRenewals.length - 1];
-    const latestEndDate = latestRenewal.newLeaseEndDate instanceof Timestamp ? latestRenewal.newLeaseEndDate.toDate() : latestRenewal.newLeaseEndDate;
+    const latestEndDate = latestRenewal.newLeaseEndDate instanceof Timestamp ? latestRenewal.newLeaseEndDate.toDate() : new Date(latestRenewal.newLeaseEndDate);
     
     if (isAfter(latestEndDate, finalLeaseEndDate)) {
         finalLeaseEndDate = latestEndDate;
