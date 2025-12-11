@@ -19,7 +19,6 @@
  *   all users in the system.
  * - Path and Data Integrity: Rules enforce that documents contain internal IDs (like a
  *   `userId`) that match the IDs in their document path. This prevents data from being
-
  *   created in the wrong location and ensures relational integrity.
  */
 rules_version = '2';
@@ -52,7 +51,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && request.resource.data.isApproved == resource.data.isApproved;
+      allow update: if isOwner(userId);
     }
 
     // Rules for top-level collections
