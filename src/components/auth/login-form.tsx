@@ -31,7 +31,7 @@ const formSchema = z.object({
 export function LoginForm() {
   const { toast } = useToast();
   const router = useRouter();
-  const { auth, firestore } = useFirebase();
+  const { auth } = useFirebase();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -60,7 +60,7 @@ export function LoginForm() {
 
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    initiateEmailSignIn(auth, firestore, values.email, values.password);
+    initiateEmailSignIn(auth, values.email, values.password);
     // Don't show toast here, the onAuthStateChanged listener will handle it.
   }
 

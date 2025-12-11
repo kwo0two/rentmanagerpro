@@ -21,7 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { useFirebase } from '@/firebase';
 import { initiateEmailSignUp } from '@/firebase/non-blocking-login';
 import { useEffect } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 const formSchema = z.object({
   displayName: z.string().min(2, { message: '이름은 2자 이상이어야 합니다.' }),
@@ -44,20 +45,47 @@ export function SignUpForm() {
   });
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
-        if (user) {
+    const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
+        if (user && user.displayName) { // Check if displayName is already set
             toast({
                 title: "회원가입 성공",
                 description: "로그인 되었습니다. 대시보드로 이동합니다.",
             });
             router.push('/dashboard');
+        } else if (user && !user.displayName) {
+          // This block runs after createUserWithEmailAndPassword succeeds
+          const { displayName } = form.getValues();
+          try {
+            await updateProfile(user, { displayName });
+            
+            // Create user profile in Firestore
+            const userRef = doc(firestore, "users", user.uid);
+            await setDoc(userRef, {
+              id: user.uid,
+              email: user.email,
+              displayName: displayName,
+              isApproved: false, // Default to not approved
+            });
+            
+            // Now everything is set up, trigger the redirect and toast
+            toast({
+                title: "회원가입 성공",
+                description: "승인 대기 중입니다. 관리자 승인 후 모든 기능을 사용할 수 있습니다.",
+            });
+            router.push('/dashboard');
+
+          } catch (error) {
+            console.error("Error setting user profile:", error);
+            toast({ variant: 'destructive', title: '프로필 생성 실패', description: '사용자 프로필을 설정하는 중 오류가 발생했습니다.'});
+          }
         }
     });
     return () => unsubscribe();
-  }, [auth, router, toast]);
+  }, [auth, firestore, router, toast, form]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
-    initiateEmailSignUp(auth, firestore, values.email, values.password, values.displayName);
+    // We only create the user here. The profile update and DB write happens in onAuthStateChanged
+    initiateEmailSignUp(auth, values.email, values.password);
   }
 
   return (

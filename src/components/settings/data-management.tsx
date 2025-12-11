@@ -163,10 +163,10 @@ export function DataManagement() {
     }
     
     try {
-        const userOwnedCollections = ['buildings', 'leaseAgreements', 'payments', 'rentAdjustments'];
+        const userOwnedCollections = ['buildings', 'leaseAgreements', 'payments', 'rentAdjustments', 'logs'];
         
         for (const name of userOwnedCollections) {
-            await deleteCollectionForUser(firestore, name, { id: user.uid, email: user.email!, role: 'member' });
+            await deleteCollectionForUser(firestore, name, { id: user.uid, email: user.email!, isApproved: true });
         }
 
         return true;
