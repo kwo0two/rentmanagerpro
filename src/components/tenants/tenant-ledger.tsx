@@ -67,7 +67,7 @@ import { Textarea } from '../ui/textarea';
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { updateDocumentNonBlocking, deleteDocumentNonBlocking, deleteRentAdjustment, updateRentAdjustment } from '@/firebase/non-blocking-updates';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
@@ -268,7 +268,8 @@ function RentAdjustmentDialog({
     const adjustmentDate = startOfMonth(ledgerRow.date);
 
     try {
-      await updateDocumentNonBlocking(doc(firestore, 'rentAdjustments', adjustmentId),
+      await updateRentAdjustment(firestore,
+        adjustmentId,
         {
           id: adjustmentId,
           ownerId: user.uid,
@@ -296,7 +297,7 @@ function RentAdjustmentDialog({
     const adjustmentDate = startOfMonth(ledgerRow.date);
 
     try {
-        await deleteDocumentNonBlocking(doc(firestore, 'rentAdjustments', ledgerRow.adjustmentId));
+        await deleteRentAdjustment(firestore, ledgerRow.adjustmentId);
         toast({ title: "조정 삭제 완료", description: `${formatDateFns(adjustmentDate, 'yyyy년 MM월')} 임대료 조정 내역이 삭제되었습니다.`});
         onSave();
         setIsOpen(false);

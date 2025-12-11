@@ -74,12 +74,7 @@ export function BuildingsList() {
   const handleDeleteBuilding = (buildingId: string, buildingName: string) => {
     if (!firestore || !user) return;
     const buildingRef = doc(firestore, 'buildings', buildingId);
-    deleteDocumentNonBlocking(buildingRef, {
-        userId: user.uid,
-        userEmail: user.email || 'N/A',
-        action: 'delete_building',
-        details: { buildingId, buildingName },
-    });
+    deleteDocumentNonBlocking(buildingRef);
     // Optimistic update
     setBuildings(prev => prev.filter(b => b.id !== buildingId));
     toast({

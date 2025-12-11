@@ -57,12 +57,7 @@ function EditPaymentDialog({ payment, onSave, onDelete }: { payment: Payment, on
     const paymentRef = doc(firestore, 'payments', payment.id);
 
     try {
-      await updateDocumentNonBlocking(paymentRef, data, {
-        userId: user.uid,
-        userEmail: user.email || 'N/A',
-        action: 'update_payment',
-        details: { paymentId: payment.id, newAmount: data.paymentAmount, newDate: formatDate(data.paymentDate) }
-      });
+      await updateDocumentNonBlocking(paymentRef, data);
 
       toast({ title: "수정 완료", description: "납부 기록이 성공적으로 수정되었습니다."});
       onSave();
@@ -79,12 +74,7 @@ function EditPaymentDialog({ payment, onSave, onDelete }: { payment: Payment, on
     if (!firestore || !user) return;
     const paymentRef = doc(firestore, 'payments', payment.id);
     
-    deleteDocumentNonBlocking(paymentRef, {
-      userId: user.uid,
-      userEmail: user.email || 'N/A',
-      action: 'delete_payment',
-      details: { paymentId: payment.id },
-    });
+    deleteDocumentNonBlocking(paymentRef);
 
     toast({
       title: '납부 기록 삭제됨',
