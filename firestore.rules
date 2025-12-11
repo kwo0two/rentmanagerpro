@@ -44,67 +44,14 @@ service cloud.firestore {
     }
 
     /**
-     * Checks for ownership on an existing document. Used for update and delete
-     * operations to prevent acting on non-existent data.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
-    /**
-     * Validates a new LeaseAgreement on creation.
-     * Ensures the creator is the owner and that the document's internal IDs
-     * match the IDs in its path for relational integrity.
-     */
-    function isCreatingLeaseAgreement(userId, leaseAgreementId) {
-      return isOwner(userId)
-          && request.resource.data.ownerId == userId
-          && request.resource.data.id == leaseAgreementId;
-    }
-
-    /**
-     * Validates a LeaseAgreement on update.
-     * Ensures the user is the owner and that critical relational IDs are immutable.
-     */
-    function isUpdatingLeaseAgreement(userId) {
-      return isExistingOwner(userId)
-          && request.resource.data.ownerId == resource.data.ownerId
-          && request.resource.data.id == resource.data.id;
-    }
-
-    /**
-     * Validates a new Payment on creation.
-     * Ensures the creator owns the parent lease and that the document's internal IDs
-     * match the IDs in its path for relational integrity.
-     */
-    function isCreatingPayment(userId, leaseAgreementId, paymentId) {
-      return isOwner(userId)
-          && request.resource.data.ownerId == userId
-          && request.resource.data.leaseAgreementId == leaseAgreementId
-          && request.resource.data.id == paymentId;
-    }
-
-    /**
-     * Validates a Payment on update.
-     * Ensures the user is the owner and that critical relational IDs are immutable.
-     */
-    function isUpdatingPayment(userId) {
-      return isExistingOwner(userId)
-          && request.resource.data.ownerId == resource.data.ownerId
-          && request.resource.data.leaseAgreementId == resource.data.leaseAgreementId
-          && request.resource.data.id == resource.data.id;
-    }
-
-    /**
      * @description Rules for the users collection.
-     * Users can read their own profile. Admins can read/write any profile (for approval).
+     * Users can read their own profile.
      * New user profiles are created during sign-up.
+     * Users can update their own profile, but cannot change their approval status.
      */
     match /users/{userId} {
       allow get: if isOwner(userId);
-      // Only authenticated users can create their own user document
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      // Users can update their own profile, but cannot change their approval status.
       allow update: if isOwner(userId) && request.resource.data.isApproved == resource.data.isApproved;
     }
 
