@@ -3,7 +3,6 @@ import { twMerge } from "tailwind-merge"
 import { format as formatFns } from "date-fns"
 import { ko } from "date-fns/locale"
 import { Timestamp } from "firebase/firestore";
-import { utcToZonedTime } from 'date-fns-tz';
 import { LeaseAgreement, Renewal } from "./types";
 import { isAfter } from "date-fns";
 
@@ -37,10 +36,6 @@ export function formatDate(date: Date | Timestamp | string | undefined | null): 
     return "유효하지 않은 날짜";
   }
   
-  // The 'date-fns-tz/formatInTimeZone' is not used due to build issues.
-  // Instead, we manually adjust for KST (UTC+9) if needed,
-  // but for "yyyy년 M월 d일" format, the date part is usually correct
-  // across timezones if the input was stored correctly (e.g., as UTC start-of-day).
   try {
     return formatFns(dateObj, "yyyy년 M월 d일", { locale: ko });
   } catch (error) {
@@ -57,7 +52,15 @@ export function formatDate(date: Date | Timestamp | string | undefined | null): 
 export function getLeaseDetails(lease: LeaseAgreement): { rentAmount: number; leaseEndDate: Date, isRenewed: boolean } {
   const today = new Date();
   let currentRent = lease.rentAmount;
-  let finalLeaseEndDate = (lease.leaseEndDate instanceof Timestamp ? lease.leaseEndDate.toDate() : new Date(lease.leaseEndDate));
+  
+  // Defensively convert leaseEndDate to a Date object
+  let finalLeaseEndDate: Date;
+  if (lease.leaseEndDate instanceof Timestamp) {
+    finalLeaseEndDate = lease.leaseEndDate.toDate();
+  } else {
+    finalLeaseEndDate = new Date(lease.leaseEndDate);
+  }
+
   let isRenewed = false;
 
   if (lease.renewals && lease.renewals.length > 0) {
