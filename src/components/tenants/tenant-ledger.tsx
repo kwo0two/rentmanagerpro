@@ -113,12 +113,14 @@ function getApplicableRent(lease: LeaseAgreement, date: Date, firestore: Firesto
         return { rent: lease.rentAmount, isRenewal: false };
     }
 
+    const getDate = (d: Date | Timestamp) => d instanceof Timestamp ? d.toDate() : d;
+
     const sortedRenewals = [...lease.renewals]
-        .sort((a, b) => ((a.renewalDate as Timestamp)?.toDate() ?? new Date(a.renewalDate)).getTime() - ((b.renewalDate as Timestamp)?.toDate() ?? new Date(b.renewalDate)).getTime())
+        .sort((a, b) => getDate(a.renewalDate).getTime() - getDate(b.renewalDate).getTime())
         .reverse();
 
     for (const renewal of sortedRenewals) {
-        if (!isBefore(date, (renewal.renewalDate as Timestamp)?.toDate() ?? new Date(renewal.renewalDate))) {
+        if (!isBefore(date, getDate(renewal.renewalDate))) {
             return { rent: renewal.newRentAmount, isRenewal: true };
         }
     }
@@ -277,16 +279,6 @@ function RentAdjustmentDialog({
           adjustmentDate: Timestamp.fromDate(adjustmentDate),
           adjustedRentAmount: data.adjustedRentAmount,
           notes: data.notes
-        },
-        {
-          userId: user.uid,
-          userEmail: user.email || 'N/A',
-          action: 'update_rent_adjustment',
-          details: { 
-            leaseId: lease.id, 
-            month: formatDateFns(adjustmentDate, 'yyyy-MM'), 
-            newAmount: data.adjustedRentAmount
-          }
         }
       );
       toast({ title: "임대료 조정 완료", description: `${formatDateFns(adjustmentDate, 'yyyy년 MM월')} 임대료가 수정되었습니다.`});
@@ -307,16 +299,7 @@ function RentAdjustmentDialog({
     const adjustmentDate = startOfMonth(ledgerRow.date);
 
     try {
-        await deleteRentAdjustment(firestore, ledgerRow.adjustmentId, {
-            userId: user.uid,
-            userEmail: user.email || 'N/A',
-            action: 'delete_rent_adjustment',
-            details: {
-                leaseId: lease.id,
-                month: formatDateFns(adjustmentDate, 'yyyy-MM'),
-                deletedAmount: ledgerRow.rent
-            }
-        });
+        await deleteRentAdjustment(firestore, ledgerRow.adjustmentId);
         toast({ title: "조정 삭제 완료", description: `${formatDateFns(adjustmentDate, 'yyyy년 MM월')} 임대료 조정 내역이 삭제되었습니다.`});
         onSave();
         setIsOpen(false);
@@ -461,8 +444,8 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
             const fetchedBuilding = buildingSnapshot.exists() ? { id: buildingSnapshot.id, ...buildingSnapshot.data() } as Building : null;
             setBuilding(fetchedBuilding);
 
-            const paymentsQuery = query(collection(firestore, 'payments'), where('ownerId', '==', user.uid), where('leaseAgreementId', '==', tenantId));
-            const adjustmentsQuery = query(collection(firestore, 'rentAdjustments'), where('ownerId', '==', user.uid), where('leaseAgreementId', '==', tenantId));
+            const paymentsQuery = query(collection(firestore, 'payments'), where('leaseAgreementId', '==', tenantId));
+            const adjustmentsQuery = query(collection(firestore, 'rentAdjustments'), where('leaseAgreementId', '==', tenantId));
             
             const [paymentsSnapshot, adjustmentsSnapshot] = await Promise.all([
                 getDocs(paymentsQuery).catch(e => {
@@ -826,3 +809,5 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
     </div>
   );
 }
+
+    
