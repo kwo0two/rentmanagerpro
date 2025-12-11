@@ -67,7 +67,7 @@ import { Textarea } from '../ui/textarea';
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { updateRentAdjustment, deleteRentAdjustment } from '@/firebase/non-blocking-updates';
+import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { v4 as uuidv4 } from 'uuid';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '../ui/alert-dialog';
@@ -107,13 +107,13 @@ const adjustmentFormSchema = z.object({
 
 // --- Calculation Logic ---
 
-function getApplicableRent(lease: LeaseAgreement, date: Date, firestore: Firestore | null): { rent: number, isRenewal: boolean } {
-    if (!firestore) return { rent: lease.rentAmount, isRenewal: false };
+// Helper function to safely convert Timestamp or Date to a Date object.
+const getDate = (d: Date | Timestamp): Date => d instanceof Timestamp ? d.toDate() : d;
+
+function getApplicableRent(lease: LeaseAgreement, date: Date): { rent: number, isRenewal: boolean } {
     if (!lease.renewals || lease.renewals.length === 0) {
         return { rent: lease.rentAmount, isRenewal: false };
     }
-
-    const getDate = (d: Date | Timestamp) => d instanceof Timestamp ? d.toDate() : d;
 
     const sortedRenewals = [...lease.renewals]
         .sort((a, b) => getDate(a.renewalDate).getTime() - getDate(b.renewalDate).getTime())
@@ -128,10 +128,9 @@ function getApplicableRent(lease: LeaseAgreement, date: Date, firestore: Firesto
     return { rent: lease.rentAmount, isRenewal: false };
 }
 
-function calculateDues(lease: LeaseAgreement, adjustments: RentAdjustment[], firestore: Firestore | null): DueEvent[] {
+function calculateDues(lease: LeaseAgreement, adjustments: RentAdjustment[]): DueEvent[] {
     const dues: DueEvent[] = [];
-    if (!firestore) return dues;
-    const startDate = startOfDay((lease.leaseStartDate as Timestamp)?.toDate() ?? new Date(lease.leaseStartDate));
+    const startDate = startOfDay(getDate(lease.leaseStartDate));
     
     const { leaseEndDate: effectiveLeaseEndDate } = getLeaseDetails(lease);
 
@@ -143,13 +142,13 @@ function calculateDues(lease: LeaseAgreement, adjustments: RentAdjustment[], fir
     const finalBillableDate = min([effectiveLeaseEndDate, today]);
 
     while (isBefore(currentMonthStart, finalBillableDate) || isSameDay(currentMonthStart, finalBillableDate)) {
-        const { rent: baseRentForMonth } = getApplicableRent(lease, currentMonthStart, firestore);
+        const { rent: baseRentForMonth } = getApplicableRent(lease, currentMonthStart);
         let notes: string | undefined;
         let finalRentForMonth = baseRentForMonth;
         let isProrated = false;
 
         const adjustmentForMonth = adjustments.find(adj => 
-            isSameDay(startOfMonth((adj.adjustmentDate as Timestamp)?.toDate() ?? new Date(adj.adjustmentDate)), currentMonthStart)
+            isSameDay(startOfMonth(getDate(adj.adjustmentDate)), currentMonthStart)
         );
 
         if (adjustmentForMonth) {
@@ -269,9 +268,7 @@ function RentAdjustmentDialog({
     const adjustmentDate = startOfMonth(ledgerRow.date);
 
     try {
-      await updateRentAdjustment(
-        firestore,
-        adjustmentId,
+      await updateDocumentNonBlocking(doc(firestore, 'rentAdjustments', adjustmentId),
         {
           id: adjustmentId,
           ownerId: user.uid,
@@ -299,7 +296,7 @@ function RentAdjustmentDialog({
     const adjustmentDate = startOfMonth(ledgerRow.date);
 
     try {
-        await deleteRentAdjustment(firestore, ledgerRow.adjustmentId);
+        await deleteDocumentNonBlocking(doc(firestore, 'rentAdjustments', ledgerRow.adjustmentId));
         toast({ title: "조정 삭제 완료", description: `${formatDateFns(adjustmentDate, 'yyyy년 MM월')} 임대료 조정 내역이 삭제되었습니다.`});
         onSave();
         setIsOpen(false);
@@ -462,15 +459,15 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
             
             const fetchedPayments = paymentsSnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }) as Payment)
-                .sort((a,b) => ((a.paymentDate as Timestamp)?.toMillis() ?? new Date(a.paymentDate).getTime()) - ((b.paymentDate as Timestamp)?.toMillis() ?? new Date(b.paymentDate).getTime()));
+                .sort((a,b) => getDate(a.paymentDate).getTime() - getDate(b.paymentDate).getTime());
             
             const fetchedAdjustments = adjustmentsSnapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() }) as RentAdjustment);
 
-            const dues = calculateDues(fetchedLease, fetchedAdjustments, firestore);
+            const dues = calculateDues(fetchedLease, fetchedAdjustments);
             
             const paymentEvents = fetchedPayments.map((p) => ({
-                date: startOfDay((p.paymentDate as Timestamp)?.toDate() ?? new Date(p.paymentDate)),
+                date: startOfDay(getDate(p.paymentDate)),
                 rent: null,
                 payment: p.paymentAmount,
                 description: '입금',
@@ -809,5 +806,3 @@ export function TenantLedger({ tenantId }: { tenantId: string }) {
     </div>
   );
 }
-
-    
