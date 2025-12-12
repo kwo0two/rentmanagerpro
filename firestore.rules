@@ -34,17 +34,19 @@ service cloud.firestore {
 
     /**
      * @description Rules for the users collection.
-     * Users can read their own profile.
-     * New user profiles are created during sign-up.
-     * Users can update their own profile.
+     * Users can read, create, and update their own profile.
+     * They cannot delete their profile or view others' profiles.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get, update: if isOwner(userId);
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId);
     }
 
-    // Rules for all other top-level collections (buildings, leaseAgreements, payments, etc.)
+    /**
+     * @description Rules for all other top-level collections.
+     * This generic rule applies to collections like 'buildings', 'leaseAgreements', 'payments', etc.
+     * It relies on an 'ownerId' field within the document data itself.
+     */
     match /{collection}/{docId} {
         // This function checks if the `ownerId` field inside the document
         // matches the currently authenticated user's ID.
