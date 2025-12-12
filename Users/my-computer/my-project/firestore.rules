@@ -2,17 +2,13 @@
  * This ruleset defines an "approved user" model for a property management application.
  *
  * Core Philosophy:
- * - Any user can sign up, but they cannot access data until approved.
- * - An approved user has full access to all data in the database, acting like an admin.
+ * - Any user can sign up, but they cannot access business data until approved.
+ * - A user can ALWAYS read their own profile to check their approval status.
+ * - An approved user has full access to all business data in the database.
  *
  * Data Structure:
  * - /users/{userId}: Stores user profiles, including an `isApproved` flag.
- * - /{collection}/{docId}: All other business data (buildings, leases, etc.).
- *
- * Key Security Decisions:
- * - Centralized Approval: Access is gated by the `isApproved` flag in the user's own profile.
- * - Global Access for Approved Users: Instead of per-document ownership, approved users can read/write anywhere.
- *   This simplifies rules and supports a collaborative management model.
+ * - /{collection}/{docId}: All other business data (buildings, leases, etc.), NOT including 'users'.
  */
 rules_version = '2';
 service cloud.firestore {
@@ -24,9 +20,11 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Function to check if the requesting user's profile exists and has `isApproved = true`.
-    // `get()` is a read operation on the database, used here for rules validation.
+    // Function to check if the requesting user is approved by reading THEIR OWN profile.
+    // This is the core of the "approved user" model.
     function isApproved() {
+      // It's crucial that a user can read their own document to check this flag.
+      // This is enabled by the rule on the 'users' collection below.
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isApproved == true;
     }
     
@@ -37,20 +35,30 @@ service cloud.firestore {
       // This is essential for the approval workflow.
       allow create: if isSignedIn() && request.auth.uid == userId;
 
-      // Only approved users can read user profiles (e.g., for an admin panel).
-      // A user can always read their own profile to check their approval status.
-      allow read: if isApproved() || (isSignedIn() && request.auth.uid == userId);
+      // A user can ALWAYS read their own profile. This breaks the Catch-22.
+      // An already approved user can read anyone's profile (e.g., for an admin panel).
+      allow read: if (isSignedIn() && request.auth.uid == userId) || isApproved();
       
-      // Only approved users can update user profiles (e.g., to approve another user).
+      // Only an approved user (admin) can update profiles (e.g., to approve another user).
       allow update: if isApproved();
+
+      // Deleting users is not allowed via security rules for safety.
+      allow delete: if false;
     }
     
     // --- Generic Rule for ALL OTHER collections ---
 
-    match /{document=**} {
-        // If the user is approved, they can read, write, create, and delete any document
-        // in any other collection.
-        allow read, write: if isApproved();
+    // This rule applies to any collection that is NOT 'users'.
+    match /{collection}/{docId} {
+      // Check if the collection name is 'users'. If so, this rule does not apply.
+      // This prevents this generic rule from overriding the specific 'users' rule above.
+      function isNotUsersCollection() {
+        return collection != 'users';
+      }
+
+      // If the user is approved, they can read and write any document
+      // in any collection other than 'users'.
+      allow read, write: if isNotUsersCollection() && isApproved();
     }
   }
 }

@@ -54,31 +54,35 @@ export default function AppLayout({
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  
   useEffect(() => {
+    // 1. Redirect to login if user is not logged in after initial auth check
     if (!isUserLoading && !user) {
       router.push('/login');
       return;
     }
 
+    // 2. Fetch profile only when we have a user and firestore instance
     if (user && firestore) {
+      const userProfileRef = doc(firestore, 'users', user.uid);
+      
       const fetchProfile = async () => {
         try {
-          const userProfileRef = doc(firestore, 'users', user.uid);
           const docSnap = await getDoc(userProfileRef);
-          
           if (docSnap.exists()) {
             setProfile(docSnap.data() as UserProfile);
           } else {
-             console.error(`User profile document does not exist at /users/${user.uid}`);
-             // This case might happen on first login if document creation is slow.
-             // For now, we assume it's an error. A more robust solution might retry.
-             setError(`사용자 프로필 문서가 Firestore에 존재하지 않습니다.`);
+            // This can happen on first signup before the document is created.
+            // We'll treat it as "not approved" for now. The component will re-render
+            // once the signup process creates the document.
+            console.warn(`User profile for ${user.uid} not found. Awaiting creation...`);
+            setProfile(null);
           }
         } catch (e: any) {
+          // This will catch actual errors, like permission denied if rules are wrong.
           console.error("Failed to fetch user profile:", e);
-          setError(`프로필을 가져오는 중 오류가 발생했습니다: ${e.message}`);
+          // For permission errors, we can treat them as "not approved" to show the waiting screen.
+          setProfile(null); 
         } finally {
           setProfileLoading(false);
         }
@@ -87,23 +91,8 @@ export default function AppLayout({
     }
   }, [user, isUserLoading, router, firestore]);
 
+  // Combined loading state
   const isLoading = isUserLoading || profileLoading;
-
-  if (error) {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-destructive text-destructive-foreground p-4">
-            <div className="flex flex-col items-center text-center max-w-lg mx-auto">
-                <ShieldAlert className="w-20 h-20 mb-6" />
-                <h1 className="text-3xl font-bold mb-4">앱 로드 실패</h1>
-                <p className="text-lg mb-2">오류가 발생하여 앱을 로드할 수 없습니다.</p>
-                <div className="bg-black/20 p-4 rounded-md text-left mt-4 w-full">
-                    <p className="font-semibold mb-2">오류 메시지:</p>
-                    <pre className="text-sm whitespace-pre-wrap font-mono">{error}</pre>
-                </div>
-            </div>
-        </div>
-    );
-  }
 
   if (isLoading) {
     return (
@@ -113,30 +102,29 @@ export default function AppLayout({
     );
   }
 
-  // After loading, check the profile status
-  if (user && profile && !profile.isApproved) {
+  // After loading, if we have a user but their profile is not approved (or not found yet), show the approval screen.
+  if (user && (!profile || !profile.isApproved)) {
       return <AwaitingApprovalScreen />;
   }
-  
-  // If still loading or no user/profile, show loader.
-  // This also handles the brief moment before router pushes to /login
-  if (!user || !profile) {
-     return (
-        <div className="flex items-center justify-center min-h-screen">
-            <Loader2 className="h-16 w-16 animate-spin text-primary" />
-        </div>
+
+  // If everything is loaded and the user is approved, show the app.
+  if (user && profile?.isApproved) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <div className="flex flex-col min-h-screen">
+            {children}
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
     );
   }
-  
 
+  // Fallback loading screen for any other edge cases before redirects happen.
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <div className="flex flex-col min-h-screen">
-          {children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+    </div>
   );
 }
