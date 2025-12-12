@@ -1,0 +1,11 @@
+{
+  "json.schemas": [
+    {
+      "fileMatch": [
+        "app-spec.json"
+      ],
+      "url": "https://google.com/google-init.json"
+    }
+  ],
+  "mcp.server.startupTimeout": 30000
+}

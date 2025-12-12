@@ -1,0 +1,56 @@
+/**
+ * This ruleset defines an "approved user" model for a property management application.
+ *
+ * Core Philosophy:
+ * - Any user can sign up, but they cannot access data until approved.
+ * - An approved user has full access to all data in the database, acting like an admin.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores user profiles, including an `isApproved` flag.
+ * - /{collection}/{docId}: All other business data (buildings, leases, etc.).
+ *
+ * Key Security Decisions:
+ * - Centralized Approval: Access is gated by the `isApproved` flag in the user's own profile.
+ * - Global Access for Approved Users: Instead of per-document ownership, approved users can read/write anywhere.
+ *   This simplifies rules and supports a collaborative management model.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Function to check if the requesting user's profile exists and has `isApproved = true`.
+    // `get()` is a read operation on the database, used here for rules validation.
+    function isApproved() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isApproved == true;
+    }
+    
+    // --- Rule for the 'users' collection ---
+
+    match /users/{userId} {
+      // Allow anyone to create their own user document upon signup.
+      // This is essential for the approval workflow.
+      allow create: if isSignedIn() && request.auth.uid == userId;
+
+      // Only approved users can read user profiles (e.g., for an admin panel).
+      // A user can always read their own profile to check their approval status.
+      allow read: if isApproved() || (isSignedIn() && request.auth.uid == userId);
+      
+      // Only approved users can update user profiles (e.g., to approve another user).
+      allow update: if isApproved();
+    }
+    
+    // --- Generic Rule for ALL OTHER collections ---
+
+    match /{document=**} {
+        // If the user is approved, they can read, write, create, and delete any document
+        // in any other collection.
+        allow read, write: if isApproved();
+    }
+  }
+}
